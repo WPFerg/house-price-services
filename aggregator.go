@@ -2,49 +2,13 @@ package main
 
 import (
 	"log"
+	"math"
 	"strings"
+
+	"sync"
 
 	"github.com/wpferg/house-price-aggregator/structs"
 )
-
-func Aggregate(channel chan structs.HouseData) (structs.HouseDataAggregationMap, structs.HouseDataAggregationMap) {
-	unitAggregate := make(structs.HouseDataAggregationMap)
-	outcodeAggregate := make(structs.HouseDataAggregationMap)
-
-	houseData, hasData := <-channel
-	iteration := 0
-
-	for hasData {
-		houseData, hasData = <-channel
-
-		codes := strings.Split(houseData.Postcode, " ")
-
-		addToMap(houseData.Postcode, houseData, &unitAggregate)
-		addToMap(codes[0], houseData, &outcodeAggregate)
-
-		iteration++
-
-		if iteration%100000 == 0 {
-			log.Println("Aggregated", iteration, "entries")
-		}
-	}
-
-	log.Println("Aggregation complete. Processed", iteration, "entries in total.")
-
-	log.Println("Calculating averages for unit level data.")
-	for key, value := range unitAggregate {
-		value.Average = float32(value.Total) / float32(value.Count)
-		unitAggregate[key] = value
-	}
-
-	log.Println("Calculating averages for outcode level data.")
-	for key, value := range outcodeAggregate {
-		value.Average = float32(value.Total) / float32(value.Count)
-		outcodeAggregate[key] = value
-	}
-
-	return unitAggregate, outcodeAggregate
-}
 
 func addToMap(key string, data structs.HouseData, mapPtr *structs.HouseDataAggregationMap) {
 	mutatedMap := *mapPtr
@@ -71,4 +35,101 @@ func addToMap(key string, data structs.HouseData, mapPtr *structs.HouseDataAggre
 	}
 
 	mutatedMap[key] = value
+}
+
+func aggregateThread(inChannel chan structs.HouseData, outChannel chan structs.HouseDataAggregationMap, waitGroup *sync.WaitGroup) {
+	unitAggregate := make(structs.HouseDataAggregationMap)
+	outcodeAggregate := make(structs.HouseDataAggregationMap)
+
+	houseData, hasData := <-inChannel
+
+	for hasData {
+		houseData, hasData = <-inChannel
+
+		codes := strings.Split(houseData.Postcode, " ")
+
+		addToMap(houseData.Postcode, houseData, &unitAggregate)
+		addToMap(codes[0], houseData, &outcodeAggregate)
+	}
+
+	outChannel <- unitAggregate
+	outChannel <- outcodeAggregate
+
+	(*waitGroup).Done()
+}
+
+func parallelisedAggregate(channel chan structs.HouseData) []chan structs.HouseDataAggregationMap {
+	log.Println("Starting parallelised aggregation.")
+	NUM_THREADS := 8
+
+	waitGroup := sync.WaitGroup{}
+	waitGroup.Add(NUM_THREADS)
+
+	resultChannels := make([]chan structs.HouseDataAggregationMap, NUM_THREADS)
+
+	for i := range resultChannels {
+		outputChannel := make(chan structs.HouseDataAggregationMap, 2)
+		resultChannels[i] = outputChannel
+		go aggregateThread(channel, outputChannel, &waitGroup)
+	}
+
+	waitGroup.Wait()
+	log.Println("Parallelised aggregation complete.")
+
+	return resultChannels
+}
+
+func mergeAggregates(a, b structs.HouseDataAggregationMap) structs.HouseDataAggregationMap {
+	for key, value := range b {
+		aggregateValues, exists := a[key]
+
+		if exists {
+			aggregateValues.Count += value.Count
+			aggregateValues.Total += value.Total
+			aggregateValues.Min = int(math.Min(float64(aggregateValues.Min), float64(value.Min)))
+			aggregateValues.Max = int(math.Max(float64(aggregateValues.Max), float64(value.Max)))
+			a[key] = aggregateValues
+		} else {
+			a[key] = value
+		}
+	}
+	return a
+}
+
+func aggregateResults(resultChannels []chan structs.HouseDataAggregationMap) (structs.HouseDataAggregationMap, structs.HouseDataAggregationMap) {
+	log.Println("Starting marge of parallelised aggregate objects.")
+
+	unitAggregate := <-resultChannels[0]
+	outcodeAggregate := <-resultChannels[0]
+
+	for _, channel := range resultChannels[1:] {
+		otherUnitAggregate := <-channel
+		otherOutcodeAggregate := <-channel
+
+		unitAggregate = mergeAggregates(unitAggregate, otherUnitAggregate)
+		outcodeAggregate = mergeAggregates(outcodeAggregate, otherOutcodeAggregate)
+	}
+
+	log.Println("Completed merge of parallelised aggregate objects.")
+	return unitAggregate, outcodeAggregate
+}
+
+func Aggregate(channel chan structs.HouseData) (structs.HouseDataAggregationMap, structs.HouseDataAggregationMap) {
+
+	resultChannels := parallelisedAggregate(channel)
+	unitAggregate, outcodeAggregate := aggregateResults(resultChannels)
+
+	log.Println("Calculating averages for unit level data.")
+	for key, value := range unitAggregate {
+		value.Average = float32(value.Total) / float32(value.Count)
+		unitAggregate[key] = value
+	}
+
+	log.Println("Calculating averages for outcode level data.")
+	for key, value := range outcodeAggregate {
+		value.Average = float32(value.Total) / float32(value.Count)
+		outcodeAggregate[key] = value
+	}
+
+	return unitAggregate, outcodeAggregate
 }
