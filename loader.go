@@ -25,6 +25,7 @@ func LoadFile(responseChannel chan structs.HouseData) {
 		responseChannel <- parseLine(scanner.Text())
 	}
 
+	log.Println("File contents loaded successfully.")
 	close(responseChannel)
 }
 
