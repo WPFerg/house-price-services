@@ -4,14 +4,14 @@ import "log"
 import "os"
 import "bufio"
 
-import "github.com/wpferg/house-prices/structs"
+import "github.com/wpferg/house-price-aggregator/structs"
 import "regexp"
 import "strconv"
 
-func LoadFile() []structs.HouseData {
-	log.Println("Attempting to load the house price file.")
+func LoadFile(responseChannel chan structs.HouseData) {
+	log.Println("Starting load of prices")
 
-	file, err := os.Open("pp-2017.csv")
+	file, err := os.Open("pp-2016.csv")
 
 	if err != nil {
 		log.Println("Error opening file", err.Error())
@@ -20,13 +20,12 @@ func LoadFile() []structs.HouseData {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
-	var results structs.HouseDataList
 
 	for scanner.Scan() {
-		results = append(results, parseLine(scanner.Text()))
+		responseChannel <- parseLine(scanner.Text())
 	}
 
-	return results
+	close(responseChannel)
 }
 
 func parseLine(data string) structs.HouseData {

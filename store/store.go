@@ -3,7 +3,7 @@ package store
 import (
 	"strings"
 
-	"github.com/wpferg/house-prices/structs"
+	"github.com/wpferg/house-price-aggregator/structs"
 )
 
 var store structs.HouseDataList

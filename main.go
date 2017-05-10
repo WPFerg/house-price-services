@@ -3,30 +3,18 @@ package main
 import (
 	"log"
 
-	"net/http"
-
-	"github.com/wpferg/house-prices/httpHandlers"
-	"github.com/wpferg/house-prices/store"
+	"github.com/wpferg/house-price-aggregator/structs"
 )
 
 func main() {
-	log.Println("House Price Services")
+	log.Println("House Price Aggregator")
 
-	priceList := LoadFile()
+	channel := make(chan structs.HouseData, 5000000)
 
-	log.Println("Loaded", len(priceList), "entries")
+	go LoadFile(channel)
+	postcodeData, outcodeData := Aggregate(channel)
 
-	store.Set(priceList)
-
-	log.Println("Starting server...")
-	startServer()
-}
-
-func startServer() {
-	http.HandleFunc("/postcode/", httpHandlers.PostcodeSearch)
-	err := http.ListenAndServe(":8081", nil)
-
-	if err != nil {
-		log.Panicln(err)
-	}
+	log.Println("Attempting to save postcode-level data")
+	SaveMap("postcode-data.json", postcodeData)
+	SaveMap("outcode-data", outcodeData)
 }
