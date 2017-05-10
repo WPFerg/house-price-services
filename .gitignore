@@ -1,2 +1,4 @@
 debug
-pp-2017.csv
+pp-*.csv
+outcode-data.json
+postcode-data.json

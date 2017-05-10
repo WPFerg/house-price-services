@@ -16,5 +16,9 @@ func main() {
 
 	log.Println("Attempting to save postcode-level data")
 	SaveMap("postcode-data.json", postcodeData)
-	SaveMap("outcode-data", outcodeData)
+
+	log.Println("Attempting to save outcode-level data")
+	SaveMap("outcode-data.json", outcodeData)
+
+	log.Println("Aggregation completed successfully.")
 }
