@@ -9,7 +9,7 @@ import (
 func main() {
 	log.Println("House Price Aggregator")
 
-	channel := make(chan structs.HouseData, 5000000)
+	channel := make(chan structs.HouseData, 5000)
 
 	go LoadFile(channel)
 	postcodeData, outcodeData := Aggregate(channel)
