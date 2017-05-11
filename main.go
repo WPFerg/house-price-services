@@ -12,13 +12,7 @@ func main() {
 	channel := make(chan structs.HouseData, 5000)
 
 	go LoadFile(channel)
-	postcodeData, outcodeData := Aggregate(channel)
-
-	log.Println("Attempting to save postcode-level data")
-	SaveMap("postcode-data.json", postcodeData)
-
-	log.Println("Attempting to save outcode-level data")
-	SaveMap("outcode-data.json", outcodeData)
+	Aggregate(channel)
 
 	log.Println("Aggregation completed successfully.")
 }
