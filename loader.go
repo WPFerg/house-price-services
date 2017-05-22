@@ -4,14 +4,13 @@ import "log"
 import "os"
 import "bufio"
 
-import "github.com/wpferg/house-price-aggregator/structs"
+import "github.com/wpferg/house-price-aggregator-services/structs"
 import "regexp"
 import "strconv"
+import "sync"
 
-func LoadFile(responseChannel chan structs.HouseData) {
-	log.Println("Starting load of prices")
-
-	file, err := os.Open("pp-2016.csv")
+func loadFile(responseChannel chan structs.HouseData, filepath string, waitGroup *sync.WaitGroup) {
+	file, err := os.Open(filepath)
 
 	if err != nil {
 		log.Println("Error opening file", err.Error())
@@ -25,6 +24,20 @@ func LoadFile(responseChannel chan structs.HouseData) {
 		responseChannel <- parseLine(scanner.Text())
 	}
 
+	waitGroup.Done()
+	log.Println("Successfully loaded file", filepath)
+}
+
+func LoadFiles(responseChannel chan structs.HouseData, filepaths ...string) {
+	log.Println("Starting load of prices")
+	waitGroup := sync.WaitGroup{}
+	waitGroup.Add(len(filepaths))
+
+	for _, filepath := range filepaths {
+		go loadFile(responseChannel, filepath, &waitGroup)
+	}
+
+	waitGroup.Wait()
 	log.Println("File contents loaded successfully.")
 	close(responseChannel)
 }

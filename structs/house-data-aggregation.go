@@ -1,9 +1,10 @@
 package structs
 
 type HouseDataAggregation struct {
-	Min     int
-	Max     int
-	Average float32
-	Total   int
-	Count   int
+	ID      string  `json:"id"`
+	Min     int     `json:"min"`
+	Max     int     `json:"max"`
+	Average float32 `json:"average"`
+	Total   int     `json:"total"`
+	Count   int     `json:"count"`
 }

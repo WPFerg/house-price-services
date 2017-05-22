@@ -7,7 +7,7 @@ import (
 
 	"sync"
 
-	"github.com/wpferg/house-price-aggregator/structs"
+	"github.com/wpferg/house-price-aggregator-services/structs"
 )
 
 func addToMap(key string, data structs.HouseData, mapPtr *structs.HouseDataAggregationMap) {
@@ -16,6 +16,7 @@ func addToMap(key string, data structs.HouseData, mapPtr *structs.HouseDataAggre
 
 	if !valueExists {
 		value = structs.HouseDataAggregation{
+			ID:    key,
 			Min:   data.Cost,
 			Max:   data.Cost,
 			Total: data.Cost,
@@ -60,7 +61,7 @@ func aggregateThread(inChannel chan structs.HouseData, outChannel chan structs.H
 
 func parallelisedAggregate(channel chan structs.HouseData) []chan structs.HouseDataAggregationMap {
 	log.Println("Starting parallelised aggregation.")
-	NUM_THREADS := 8
+	NUM_THREADS := 1
 
 	waitGroup := sync.WaitGroup{}
 	waitGroup.Add(NUM_THREADS)
@@ -114,22 +115,30 @@ func aggregateResults(resultChannels []chan structs.HouseDataAggregationMap) (st
 	return unitAggregate, outcodeAggregate
 }
 
-func Aggregate(channel chan structs.HouseData) (structs.HouseDataAggregationMap, structs.HouseDataAggregationMap) {
+func Aggregate(channel chan structs.HouseData) ([]structs.HouseDataAggregation, []structs.HouseDataAggregation) {
 
 	resultChannels := parallelisedAggregate(channel)
 	unitAggregate, outcodeAggregate := aggregateResults(resultChannels)
 
+	unitList := make([]structs.HouseDataAggregation, len(unitAggregate))
+	outcodeList := make([]structs.HouseDataAggregation, len(outcodeAggregate))
+
 	log.Println("Calculating averages for unit level data.")
-	for key, value := range unitAggregate {
+	i := 0
+	for _, value := range unitAggregate {
 		value.Average = float32(value.Total) / float32(value.Count)
-		unitAggregate[key] = value
+		unitList[i] = value
+
+		i++
 	}
 
 	log.Println("Calculating averages for outcode level data.")
-	for key, value := range outcodeAggregate {
+	i = 0
+	for _, value := range outcodeAggregate {
 		value.Average = float32(value.Total) / float32(value.Count)
-		outcodeAggregate[key] = value
+		outcodeList[i] = value
+		i++
 	}
 
-	return unitAggregate, outcodeAggregate
+	return unitList, outcodeList
 }

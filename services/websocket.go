@@ -2,9 +2,13 @@ package services
 
 import (
 	"log"
+	"math"
+	"sync"
+
+	"strings"
 
 	"github.com/gorilla/websocket"
-	"github.com/wpferg/house-price-aggregator/structs"
+	"github.com/wpferg/house-price-aggregator-services/structs"
 )
 
 type websocketRequest struct {
@@ -12,53 +16,71 @@ type websocketRequest struct {
 	Payload string `json:"payload"`
 }
 
-type websocketResponse struct {
-	Success bool                          `json:"success"`
-	Payload *structs.HouseDataAggregation `json:"payload,omitempty"`
-}
-
-func handleRequest(payload string, mapToUse *structs.HouseDataAggregationMap) websocketResponse {
-	matchingData, exists := (*mapToUse)[payload]
-
-	if !exists {
-		return websocketResponse{
-			Success: true,
-			Payload: nil,
+func processSearch(responseChannel chan structs.HouseDataAggregation, search string, list *[]structs.HouseDataAggregation, waitGroup *sync.WaitGroup) {
+	searchLower := strings.ToLower(search)
+	for _, value := range *list {
+		if strings.Contains(strings.ToLower(value.ID), searchLower) {
+			responseChannel <- value
 		}
 	}
 
-	return websocketResponse{
-		Success: true,
-		Payload: &matchingData,
-	}
+	waitGroup.Done()
 }
 
-func HandleConnection(conn *websocket.Conn, unitData, outcodeData *structs.HouseDataAggregationMap) {
+func handleRequest(response WebsocketResponse, search string, list *[]structs.HouseDataAggregation) {
+	log.Println("Starting distributed search for", search)
+	NUM_THREADS := float64(2)
+	listSize := float64(len(*list))
+	countPerThread := math.Ceil(listSize / NUM_THREADS)
+
+	waitGroup := sync.WaitGroup{}
+	waitGroup.Add(int(NUM_THREADS))
+	responseChannel := make(chan structs.HouseDataAggregation, 1024)
+
+	response.Manage(responseChannel)
+
+	for i := float64(0); i < NUM_THREADS; i++ {
+		startIndex := int(math.Max(0, i*countPerThread))
+		endIndex := int(math.Min(listSize, (i+1)*countPerThread))
+		slice := (*list)[startIndex:endIndex]
+		go processSearch(responseChannel, search, &slice, &waitGroup)
+	}
+
+	waitGroup.Wait()
+	close(responseChannel)
+
+	log.Println("Finished distributed search for", search)
+}
+
+func HandleConnection(conn *websocket.Conn, unitData, outcodeData *[]structs.HouseDataAggregation) {
+	iterationCount := 0
 	for {
 		request := websocketRequest{}
 		err := conn.ReadJSON(&request)
-		response := websocketResponse{}
+		response := WebsocketResponse{
+			ID:     iterationCount,
+			Socket: conn,
+		}
 
 		if err != nil {
 			log.Println("Error in request", err.Error())
-			response.Success = false
-			response.Payload = nil
+			response.Finish(false)
 		} else {
 			log.Println("Request information", request)
+			response.Start()
 			switch request.Method {
 			case "outcode-search":
-				response = handleRequest(request.Payload, outcodeData)
+				handleRequest(response, request.Payload, outcodeData)
 				break
 			case "unit-search":
-				response = handleRequest(request.Payload, unitData)
+				handleRequest(response, request.Payload, unitData)
 				break
 			default:
-				response.Success = false
-				response.Payload = nil
+				response.Finish(false)
 				break
 			}
 		}
 
-		conn.WriteJSON(response)
+		iterationCount++
 	}
 }

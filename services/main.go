@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/gorilla/websocket"
-	"github.com/wpferg/house-price-aggregator/structs"
+	"github.com/wpferg/house-price-aggregator-services/structs"
 )
 
 var upgrader = websocket.Upgrader{
@@ -13,7 +13,7 @@ var upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
-var unitData, outcodeData *structs.HouseDataAggregationMap
+var unitData, outcodeData *[]structs.HouseDataAggregation
 
 func handleHttpRequest(w http.ResponseWriter, r *http.Request) {
 	log.Println("Received request, attempting to upgrade")
@@ -28,7 +28,7 @@ func handleHttpRequest(w http.ResponseWriter, r *http.Request) {
 	HandleConnection(connection, unitData, outcodeData)
 }
 
-func LaunchServices(unit, outcode *structs.HouseDataAggregationMap) {
+func LaunchServices(unit, outcode *[]structs.HouseDataAggregation) {
 	log.Println("Attempting to start HTTP Services and Websocket upgrader")
 
 	unitData, outcodeData = unit, outcode
