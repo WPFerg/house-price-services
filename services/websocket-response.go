@@ -4,7 +4,7 @@ import (
 	"log"
 
 	"github.com/gorilla/websocket"
-	"github.com/wpferg/house-price-aggregator-services/structs"
+	"github.com/wpferg/house-price-services/structs"
 )
 
 type websocketStart struct {

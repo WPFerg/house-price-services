@@ -7,7 +7,7 @@ import (
 
 	"sync"
 
-	"github.com/wpferg/house-price-aggregator-services/structs"
+	"github.com/wpferg/house-price-services/structs"
 )
 
 func addToMap(key string, data structs.HouseData, mapPtr *structs.HouseDataAggregationMap) {

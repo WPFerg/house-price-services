@@ -5,10 +5,11 @@ import (
 	"math"
 	"sync"
 
-	"strings"
+	"encoding/json"
 
 	"github.com/gorilla/websocket"
-	"github.com/wpferg/house-price-aggregator-services/structs"
+	"github.com/wpferg/house-price-services/structs"
+	"github.com/wpferg/house-price-services/util"
 )
 
 type websocketRequest struct {
@@ -16,15 +17,14 @@ type websocketRequest struct {
 	Payload string `json:"payload"`
 }
 
-func processSearch(responseChannel chan structs.HouseDataAggregation, search string, list *[]structs.HouseDataAggregation, waitGroup *sync.WaitGroup) {
-	searchLower := strings.ToLower(search)
-	for _, value := range *list {
-		if strings.Contains(strings.ToLower(value.ID), searchLower) {
-			responseChannel <- value
-		}
-	}
+type websocketError struct {
+	isWebsocketError bool
+	error
+}
 
-	waitGroup.Done()
+type requestError struct {
+	error
+	isRequestError bool
 }
 
 func handleRequest(response WebsocketResponse, search string, list *[]structs.HouseDataAggregation) {
@@ -43,7 +43,7 @@ func handleRequest(response WebsocketResponse, search string, list *[]structs.Ho
 		startIndex := int(math.Max(0, i*countPerThread))
 		endIndex := int(math.Min(listSize, (i+1)*countPerThread))
 		slice := (*list)[startIndex:endIndex]
-		go processSearch(responseChannel, search, &slice, &waitGroup)
+		go util.ProcessSearchAsync(responseChannel, search, &slice, &waitGroup)
 	}
 
 	waitGroup.Wait()
@@ -52,19 +52,53 @@ func handleRequest(response WebsocketResponse, search string, list *[]structs.Ho
 	log.Println("Finished distributed search for", search)
 }
 
+func handleIncomingFrame(conn *websocket.Conn, unitData, outcodeData *[]structs.HouseDataAggregation) (*websocketRequest, error) {
+	_, bytes, err := conn.ReadMessage()
+
+	if err != nil {
+		return nil, websocketError{
+			isWebsocketError: true,
+			error:            err,
+		}
+	}
+
+	request := websocketRequest{}
+	err = json.Unmarshal(bytes, &request)
+
+	if err != nil {
+		return nil, requestError{
+			isRequestError: true,
+			error:          err,
+		}
+	}
+
+	return &request, nil
+}
+
 func HandleConnection(conn *websocket.Conn, unitData, outcodeData *[]structs.HouseDataAggregation) {
 	iterationCount := 0
+	defer conn.Close()
 	for {
-		request := websocketRequest{}
-		err := conn.ReadJSON(&request)
+		request, err := handleIncomingFrame(conn, unitData, outcodeData)
+
+		if err != nil {
+		}
+
 		response := WebsocketResponse{
 			ID:     iterationCount,
 			Socket: conn,
 		}
-
 		if err != nil {
-			log.Println("Error in request", err.Error())
-			response.Finish(false)
+			if requestErrorDetails, ok := err.(requestError); ok {
+				log.Println("Error in request\n", requestErrorDetails.Error())
+				response.Finish(false)
+			} else if websocketError, ok := err.(websocketError); ok {
+				log.Println("Error reading data from socket (Potentially closed). Halting. Error details:\n", websocketError.Error())
+				break
+			} else {
+				log.Println("Unhandled error:\n", err.Error())
+				response.Finish(false)
+			}
 		} else {
 			log.Println("Request information", request)
 			response.Start()

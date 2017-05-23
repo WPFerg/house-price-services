@@ -3,8 +3,8 @@ package main
 import (
 	"log"
 
-	"github.com/wpferg/house-price-aggregator-services/services"
-	"github.com/wpferg/house-price-aggregator-services/structs"
+	"github.com/wpferg/house-price-services/services"
+	"github.com/wpferg/house-price-services/structs"
 )
 
 func main() {
@@ -12,7 +12,7 @@ func main() {
 
 	channel := make(chan structs.HouseData, 5000)
 
-	go LoadFiles(channel, "pp-2015.csv", "pp-2016.csv", "pp-2017.csv")
+	go LoadFiles(channel, "pp-2016.csv", "pp-2017.csv")
 	unitAggregate, outcodeAggregate := Aggregate(channel)
 
 	log.Println("Aggregation completed successfully.")

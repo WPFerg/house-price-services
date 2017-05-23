@@ -4,7 +4,7 @@ import "log"
 import "os"
 import "bufio"
 
-import "github.com/wpferg/house-price-aggregator-services/structs"
+import "github.com/wpferg/house-price-services/structs"
 import "regexp"
 import "strconv"
 import "sync"
