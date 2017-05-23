@@ -9,7 +9,7 @@ import (
 
 func ProcessSearch(search string, list *[]structs.HouseDataAggregation) []structs.HouseDataAggregation {
 	searchLower := strings.ToLower(search)
-	results := make([]structs.HouseDataAggregation, 1)
+	results := make([]structs.HouseDataAggregation, 0)
 	for _, value := range *list {
 		if strings.Contains(strings.ToLower(value.ID), searchLower) {
 			results = append(results, value)
